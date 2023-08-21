@@ -24,7 +24,7 @@ public class VideoRepository : IVideoRepository
         command.Parameters.AddWithValue("@Duration", model.Duration);
         command.Parameters.AddWithValue("@VideoFile", model.VideoFile);
         command.Parameters.AddWithValue("@Thumbnail", model.Thumbnail);
-        
+
         connection.Open();
         command.ExecuteNonQuery();
         connection.Close();
@@ -39,7 +39,7 @@ public class VideoRepository : IVideoRepository
             CommandType = CommandType.Text
         };
         command.Parameters.AddWithValue("@Id", id);
-        
+
         connection.Open();
         command.ExecuteNonQuery();
         connection.Close();
@@ -53,7 +53,7 @@ public class VideoRepository : IVideoRepository
         {
             CommandType = CommandType.Text
         };
-        
+
         List<Video> Videos = new();
         connection.Open();
         MySqlDataReader reader = command.ExecuteReader();
@@ -64,10 +64,10 @@ public class VideoRepository : IVideoRepository
                 Id = reader.GetInt32("id"),
                 Name = reader.GetString("Name"),
                 Description = reader.GetString("Description"),
-                UploadDate = reader.GetInt16("UploadDate"),
+                UploadDate = reader.GetDateTime("UploadDate"),
                 Duration = reader.GetInt16("duration"),
-                VideoFile = reader.GetByte("VideoFile"),
-                Thumbnail = reader.GetString("Thumbnail")
+                Thumbnail = reader.GetString("Thumbnail"),
+                VideoFile = reader.GetString("VideoFile")
             };
             Videos.Add(Video);
         }
@@ -84,7 +84,7 @@ public class VideoRepository : IVideoRepository
             CommandType = CommandType.Text
         };
         command.Parameters.AddWithValue("@Id", id);
-        
+
         connection.Open();
         MySqlDataReader reader = command.ExecuteReader();
         reader.Read();
@@ -95,10 +95,10 @@ public class VideoRepository : IVideoRepository
                 Id = reader.GetInt32("id"),
                 Name = reader.GetString("Name"),
                 Description = reader.GetString("Description"),
-                UploadDate = reader.GetInt16("UploadDate"),
+                UploadDate = reader.GetDateTime("UploadDate"),
                 Duration = reader.GetInt16("duration"),
-                VideoFile = reader.GetByte("VideoFile"),
-                Thumbnail = reader.GetString("Thumbnail")
+                Thumbnail = reader.GetString("Thumbnail"),
+                VideoFile = reader.GetString("VideoFile")
             };
             connection.Close();
             return Video;
@@ -110,7 +110,7 @@ public class VideoRepository : IVideoRepository
     public void Update(Video model)
     {
         MySqlConnection connection = new(connectionString);
-        string sql = "update Video set "
+        string sql = "update Video   set "
                         + "Name = @Name, "
                         + "Description = @Description, "
                         + "UploadDate = @UploadDate, "
@@ -129,7 +129,7 @@ public class VideoRepository : IVideoRepository
         command.Parameters.AddWithValue("@Duration", model.Duration);
         command.Parameters.AddWithValue("@VideoFile", model.VideoFile);
         command.Parameters.AddWithValue("@Thumbnail", model.Thumbnail);
-        
+
         connection.Open();
         command.ExecuteNonQuery();
         connection.Close();

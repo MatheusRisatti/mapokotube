@@ -19,16 +19,17 @@ namespace MapokoTube.Models
 
         [Display(Name = "Descrição")]
         public string Description { get; set; }
-
+        
         [Display(Name = "Data de Upload")]
         public DateTime UploadDate { get; set; }
 
         [Display(Name = "Duração (em minutos)")]
-        public ushort Duration { get; set; }
+        public Int16 Duration { get; set; }
 
         [StringLength(200)]
         [Display(Name = "Thumbnail")]
         public string Thumbnail { get; set; }
+
 
         [Required(ErrorMessage = "O caminho do arquivo de vídeo é obrigatório")]
         [StringLength(200)]

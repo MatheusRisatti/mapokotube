@@ -55,7 +55,7 @@ public class TagRepository : ITagRepository
         {
             Tag Tag = new()
             {
-                Id = reader.GetByte("id"),
+                Id = reader.GetInt32("id"),
                 Name = reader.GetString("name")
             };
             Tags.Add(Tag);
