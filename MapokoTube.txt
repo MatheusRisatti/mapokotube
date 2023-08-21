@@ -1,0 +1,940 @@
+-- Para criar a solução
+dotnet new sln --name MapokoTube
+
+
+-- Para criar o projeto
+dotnet new mvc -f net6.0 -o MapokoTube
+
+
+-- Para adicionar o projeto à solução
+dotnet sln add MapokoTube\MapokoTube.csproj
+
+
+-- Instalar os pacotes do Entity - para acesso a dados
+dotnet add package MySql.Data --version 6.10.9
+
+
+-- Criar as seguintes pasta:
+ - Interfaces
+ - Repositories
+
+
+-- Abrir o arquivo MapokoTube.csproj e fazer a alteração do configuração Nullabe:
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MySql.Data" Version="6.10.9" />
+  </ItemGroup>
+
+</Project>
+
+
+-- Na pasta Models, criar as classes (Botão Direito na pasta Models e escolher a opção 'New # Add > Class'):
+ - Genre
+ - Movie
+ - MovieGenre
+ 
+
+-- Abrir e alterar o arquivo Genre.cs:
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+namespace MapokoTube.Models;
+
+[Table("Genre")]
+public class Genre
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public byte Id { get; set; }
+    
+    [Display(Name = "Nome")]
+    [Required(ErrorMessage = "O nome do Gênero é obrigatório")]
+    [StringLength(30, ErrorMessage = "O Nome deve possuir no máximo 30 caracteres")]
+    public string Name { get; set; }    
+    public ICollection<MovieGenre> Movies { get; set; }
+}
+
+
+-- Abrir e alterar o arquivo Movie.cs:
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+namespace MapokoTube.Models;
+
+[Table("Movie")]
+public class Movie
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    [Display(Name = "Título")]
+    [Required(ErrorMessage = "O Título é obrigatório")]
+    [StringLength(100, ErrorMessage = "O Título deve possuir no máximo 100 caracteres")]
+    public string Title { get; set; }
+
+    [Display(Name = "Título Original")]
+    [Required(ErrorMessage = "O Título Original é obrigatório")]
+    [StringLength(100, ErrorMessage = "O Título Original deve possuir no máximo 100 caracteres")]
+    public string OriginalTitle { get; set; }
+
+    [Display(Name = "Sinopse")]
+    [Required(ErrorMessage = "A Sinopse é obrigatória")]
+    [StringLength(8000, ErrorMessage = "A Sinopse deve possuir no máximo 5000 caracteres")]
+    public string Synopsis { get; set; }
+
+    [Column(TypeName = "Year")]
+    [Display(Name = "Ano de Estreia")]
+    [Required(ErrorMessage = "O Ano de Estreia é obrigatório")]
+    public Int16 MovieYear { get; set; }
+
+    [Display(Name = "Duração (em minutos)")]
+    [Required(ErrorMessage = "A Duração é obrigatória")]
+    public Int16 Duration { get; set; }
+
+    [Display(Name = "Classificação Etária")]
+    [Required(ErrorMessage = "A Classificação Etária é obrigatória")]
+    public byte AgeRating { get; set; }
+
+    [StringLength(200)]
+    [Display(Name = "Foto")]
+    public string Image { get; set; }
+
+    [NotMapped]
+    [Display(Name = "Duração")]
+    public string HourDuration { get {
+        return TimeSpan.FromMinutes(Duration) .ToString(@"%h'h 'mm'min'");
+    }}
+
+    public ICollection<MovieGenre> Genres { get; set; }
+}
+
+
+-- Abrir e alterar o arquivo MovieGenre.cs:
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace MapokoTube.Models;
+[Table("MovieGenre")]
+public class MovieGenre
+{
+    [Key, Column(Order = 1)]
+    public int MovieId { get; set; }
+    [ForeignKey("MovieId")]
+    public Movie Movie { get; set; }
+
+    [Key, Column(Order = 2)]
+    public byte GenreId { get; set; }
+    [ForeignKey("GenreId")]
+    public Genre Genre { get; set; }
+}
+
+
+-- Na pasta Interfaces, criar as interfaces (Botão Direito na pasta Interfaces e escolher a opção 'New # Add > Interface'):
+ - IGenreRepository
+ - IMovieRepository
+ - IRepository
+
+
+-- Abrir e alterar o arquivo IRepository.cs:
+namespace MapokoTube.Interfaces;
+
+public interface IRepository<T> where T : class
+{
+    // CRUD: CREATE, READ, UPADTE, DELETE 
+    // 4 Operações básicas de todo banco de dados
+    void Create(T model); // Add 
+
+    List<T> ReadAll(); // Get 
+
+    T ReadById(int? id); // Get(id)
+
+    void Update(T model); //Edit
+
+    void Delete(int? id);
+}
+
+
+-- Abrir e alterar o arquivo IGenreRepository.cs:
+using MapokoTube.Models;
+namespace MapokoTube.Interfaces;
+
+public interface IGenreRepository : IRepository<Genre>
+{
+}
+
+
+-- Abrir e alterar o arquivo IMovieRepository.cs:
+using MapokoTube.Models;
+namespace MapokoTube.Interfaces;
+
+public interface IMovieRepository : IRepository<Movie>
+{
+}
+
+
+-- Na pasta Repositories, criar as classes (Botão Direito na pasta Repositories e escolher a opção 'New # Add > Class'):
+ - GenreRepository
+ - MovieRepository
+ 
+
+-- Abrir e alterar o arquivo GenreRepository.cs:
+using System.Data;
+using MapokoTube.Interfaces;
+using MapokoTube.Models;
+using MySql.Data.MySqlClient;
+
+namespace MapokoTube.Repositories;
+
+public class GenreRepository : IGenreRepository
+{
+    readonly string connectionString = "server=localhost;port=3306;database=MapokoTubedb;uid=root;pwd=''";
+
+    public void Create(Genre model)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "insert into Genre(Name) values (@Name)";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Name", model.Name);
+        
+        connection.Open();
+        command.ExecuteNonQuery();
+        connection.Close();
+    }
+
+    public void Delete(int? id)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "delete from Genre where Id = @Id";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Id", id);
+        
+        connection.Open();
+        command.ExecuteNonQuery();
+        connection.Close();
+    }
+
+    public List<Genre> ReadAll()
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "select * from Genre";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        
+        List<Genre> genres = new();
+        connection.Open();
+        MySqlDataReader reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            Genre genre = new()
+            {
+                Id = reader.GetByte("id"),
+                Name = reader.GetString("name")
+            };
+            genres.Add(genre);
+        }
+        connection.Close();
+        return genres;
+    }
+
+    public Genre ReadById(int? id)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "select * from Genre where Id = @Id";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Id", id);
+        
+        connection.Open();
+        MySqlDataReader reader = command.ExecuteReader();
+        reader.Read();
+        if (reader.HasRows)
+        {
+            Genre genre = new()
+            {
+                Id = reader.GetByte("id"),
+                Name = reader.GetString("name")
+            };
+            connection.Close();
+            return genre;
+        }
+        connection.Close();
+        return null;
+    }
+
+    public void Update(Genre model)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "update Genre set Name = @Name where Id = @Id";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Id", model.Id);
+        command.Parameters.AddWithValue("@Name", model.Name);
+        
+        connection.Open();
+        command.ExecuteNonQuery();
+        connection.Close();
+    }
+}
+
+
+-- Abrir e alterar o arquivo MovieRepository.cs:
+using System.Data;
+using MapokoTube.Interfaces;
+using MapokoTube.Models;
+using MySql.Data.MySqlClient;
+
+namespace MapokoTube.Repositories;
+
+public class MovieRepository : IMovieRepository
+{
+    readonly string connectionString = "server=localhost;port=3306;database=MapokoTubedb;uid=root;pwd=''";
+
+    public void Create(Movie model)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "insert into Movie(Title, OriginalTitle, Synopsis, MovieYear, Duration, AgeRating, Image) "
+              + "values (@Title, @OriginalTitle, @Synopsis, @MovieYear, @Duration, @AgeRating, @Image)";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Title", model.Title);
+        command.Parameters.AddWithValue("@OriginalTitle", model.OriginalTitle);
+        command.Parameters.AddWithValue("@Synopsis", model.Synopsis);
+        command.Parameters.AddWithValue("@MovieYear", model.MovieYear);
+        command.Parameters.AddWithValue("@Duration", model.Duration);
+        command.Parameters.AddWithValue("@AgeRating", model.AgeRating);
+        command.Parameters.AddWithValue("@Image", model.Image);
+        
+        connection.Open();
+        command.ExecuteNonQuery();
+        connection.Close();
+    }
+
+    public void Delete(int? id)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "delete from Movie where Id = @Id";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Id", id);
+        
+        connection.Open();
+        command.ExecuteNonQuery();
+        connection.Close();
+    }
+
+    public List<Movie> ReadAll()
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "select * from Movie";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        
+        List<Movie> movies = new();
+        connection.Open();
+        MySqlDataReader reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            Movie movie = new()
+            {
+                Id = reader.GetInt32("id"),
+                Title = reader.GetString("title"),
+                OriginalTitle = reader.GetString("originalTitle"),
+                Synopsis = reader.GetString("synopsis"),
+                MovieYear = reader.GetInt16("movieYear"),
+                Duration = reader.GetInt16("duration"),
+                AgeRating = reader.GetByte("ageRating"),
+                Image = reader.GetString("image")
+            };
+            movies.Add(movie);
+        }
+        connection.Close();
+        return movies;
+    }
+
+    public Movie ReadById(int? id)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "select * from Movie where Id = @Id";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Id", id);
+        
+        connection.Open();
+        MySqlDataReader reader = command.ExecuteReader();
+        reader.Read();
+        if (reader.HasRows)
+        {
+            Movie movie = new()
+            {
+                Id = reader.GetInt32("id"),
+                Title = reader.GetString("title"),
+                OriginalTitle = reader.GetString("originalTitle"),
+                Synopsis = reader.GetString("synopsis"),
+                MovieYear = reader.GetInt16("movieYear"),
+                Duration = reader.GetInt16("duration"),
+                AgeRating = reader.GetByte("ageRating"),
+                Image = reader.GetString("image")
+            };
+            connection.Close();
+            return movie;
+        }
+        connection.Close();
+        return null;
+    }
+
+    public void Update(Movie model)
+    {
+        MySqlConnection connection = new(connectionString);
+        string sql = "update Movie set "
+                        + "Title = @Title, "
+                        + "OriginalTitle = @OriginalTitle, "
+                        + "Synopsis = @Synopsis, "
+                        + "MovieYear = @MovieYear, "
+                        + "Duration = @Duration, "
+                        + "AgeRating = @AgeRating, "
+                        + "Image = @Image "
+                    + "where Id = @Id";
+        MySqlCommand command = new(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.AddWithValue("@Id", model.Id);
+        command.Parameters.AddWithValue("@Title", model.Title);
+        command.Parameters.AddWithValue("@OriginalTitle", model.OriginalTitle);
+        command.Parameters.AddWithValue("@Synopsis", model.Synopsis);
+        command.Parameters.AddWithValue("@MovieYear", model.MovieYear);
+        command.Parameters.AddWithValue("@Duration", model.Duration);
+        command.Parameters.AddWithValue("@AgeRating", model.AgeRating);
+        command.Parameters.AddWithValue("@Image", model.Image);
+        
+        connection.Open();
+        command.ExecuteNonQuery();
+        connection.Close();
+    }
+}
+
+
+-- Abrir e alterar o arquivo Program.cs:
+using MapokoTube.Interfaces;
+using MapokoTube.Repositories;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllersWithViews();
+
+builder.Services.AddTransient<IGenreRepository, GenreRepository>();
+builder.Services.AddTransient<IMovieRepository, MovieRepository>();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseAuthorization();
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Home}/{action=Index}/{id?}");
+
+app.Run();
+
+
+-- Abrir e alterar o arquivo HomeController.cs:
+using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using MapokoTube.Models;
+using MapokoTube.Interfaces;
+
+
+namespace MapokoTube.Controllers;
+
+public class HomeController : Controller
+{
+    private readonly ILogger<HomeController> _logger;
+    private readonly IMovieRepository _movieRepository;
+
+    public HomeController(ILogger<HomeController> logger, IMovieRepository movieRepository)
+    {
+        _logger = logger;
+        _movieRepository = movieRepository;
+    }
+
+    public IActionResult Index()
+    {
+        var movies = _movieRepository.ReadAll();
+        return View(movies);
+    }
+
+    public IActionResult Privacy()
+    {
+        return View();
+    }
+
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    public IActionResult Error()
+    {
+        _logger.LogError("Ocorreu um erro");
+        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+    }
+}
+
+
+-- Abrir e alterar o arquivo Views\Home\Index.cshtml:
+@model List<MapokoTube.Models.Movie>
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+</div>
+
+@foreach (Movie movie in Model)
+{
+    <p>@movie.Id - @movie.Title</p>
+}
+
+
+Criar uma pasta Database dentro do Repositório, baixar os arquivos do link, https://drive.google.com/drive/folders/169Go2XpP1TCzBgDtwNbfWv69Nm0jnl6Q?usp=sharing,  e salvar na pasta.
+
+
+-- Abrir o Xampp e executar o MySql
+
+
+-- Abrir o MySql Workbench e executar os arquivos baixo na seguinte ordem:
+ - DDL
+ - DML
+
+
+-- Executar o projeto para teste
+
+
+
+
+-- ESTILIZANDO O PROJETO
+-- Abrir e alterar o arquivo wwwroot\css\style.css:
+html {
+  font-size: 14px;
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+.bi {
+  vertical-align: -.125em;
+  fill: currentColor;
+}
+
+.btn-bd-primary {
+  --bd-violet-bg: darkred;
+  --bd-violet-rgb: 112.520718, 44.062154, 249.437846;
+
+  --bs-btn-font-weight: 600;
+  --bs-btn-color: var(--bs-white);
+  --bs-btn-bg: var(--bd-violet-bg);
+  --bs-btn-border-color: var(--bd-violet-bg);
+  --bs-btn-hover-color: var(--bs-white);
+  --bs-btn-hover-bg: rgb(99, 5, 5);
+  --bs-btn-hover-border-color: rgb(99, 5, 5);
+  --bs-btn-focus-shadow-rgb: var(--bd-violet-rgb);
+  --bs-btn-active-color: var(--bs-btn-hover-color);
+  --bs-btn-active-bg: darkred;
+  --bs-btn-active-border-color: darkred;
+}
+.bd-mode-toggle {
+  z-index: 1500;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+
+  .bd-placeholder-img-lg {
+    font-size: 3.5rem;
+  }
+}
+
+.navbar-brand{
+  font-size: 24px !important;
+  color: darkred;
+}
+
+a {
+  color: var(--bs-body-color);
+}
+
+.text-logo {
+  color: var(--bs-body-color);
+}
+
+.loader.simple-loader {
+  background-color: rgba(0, 0, 0, 0.9);
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  text-align: center;  
+  overflow: hidden !important;
+  right: 0px;
+  z-index: 1500;
+}
+
+.loader.simple-loader img{
+  left: -200px;
+  width: 25%;
+}
+
+.footer {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  white-space: nowrap;
+  line-height: 60px;
+}
+
+
+-- Baixar a pasta img do link, https://drive.google.com/drive/folders/1_Eah4I8UKRwkmE9ocCyf_pFvd6JxgzZV?usp=sharing, e salvar na pasta wwwroot.
+
+
+-- Abrir e alterar o arquivo wwwroot\site.js:
+// Please see documentation at https://docs.microsoft.com/aspnet/core/client-side/bundling-and-minification
+// for details on configuring this project to bundle and minify static web assets.
+
+// Write your JavaScript code.
+function showLoading() {
+    const loader = document.querySelector('.loader');
+    if (loader != null) {
+        loader.classList.remove('d-none');
+    }
+};
+
+function hideLoading() {
+    const loader = document.querySelector('.loader');
+    if (loader != null) {
+        loader.classList.add('d-none');
+    }
+};
+
+$(document).ready(function () {
+    hideLoading();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.querySelector('form');
+    console.log(form);
+    if (form != undefined){ 
+        form.addEventListener('submit', function() {
+            if ($(form).valid() === true) 
+                showLoading();
+        })
+    }
+});
+
+
+-- Criar na pasta wwwroot\js um arquivo com o nome color-modes.js e incluir o código abaixo:
+/*!
+ * Color mode toggler for Bootstrap's docs (https://getbootstrap.com/)
+ * Copyright 2011-2023 The Bootstrap Authors
+ * Licensed under the Creative Commons Attribution 3.0 Unported License.
+ */
+
+(() => {
+  'use strict'
+
+  const getStoredTheme = () => localStorage.getItem('theme-MapokoTube')
+  const setStoredTheme = theme => localStorage.setItem('theme-MapokoTube', theme)
+
+  const getPreferredTheme = () => {
+    const storedTheme = getStoredTheme()
+    if (storedTheme) {
+      return storedTheme
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+
+  const setTheme = theme => {
+    if (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.setAttribute('data-bs-theme', 'dark')
+    } else {
+      document.documentElement.setAttribute('data-bs-theme', theme)
+    }
+  }
+
+  setTheme(getPreferredTheme())
+
+  const showActiveTheme = (theme, focus = false) => {
+    const themeSwitcher = document.querySelector('#bd-theme')
+
+    if (!themeSwitcher) {
+      return
+    }
+
+    const themeSwitcherText = document.querySelector('#bd-theme-text')
+    const activeThemeIcon = document.querySelector('.theme-icon-active use')
+    const btnToActive = document.querySelector(`[data-bs-theme-value="${theme}"]`)
+    const svgOfActiveBtn = btnToActive.querySelector('svg use').getAttribute('href')
+
+    document.querySelectorAll('[data-bs-theme-value]').forEach(element => {
+      element.classList.remove('active')
+      element.setAttribute('aria-pressed', 'false')
+    })
+
+    btnToActive.classList.add('active')
+    btnToActive.setAttribute('aria-pressed', 'true')
+    activeThemeIcon.setAttribute('href', svgOfActiveBtn)
+    const themeSwitcherLabel = `${themeSwitcherText.textContent} (${btnToActive.dataset.bsThemeValue})`
+    themeSwitcher.setAttribute('aria-label', themeSwitcherLabel)
+
+    if (focus) {
+      themeSwitcher.focus()
+    }
+  }
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const storedTheme = getStoredTheme()
+    if (storedTheme !== 'light' && storedTheme !== 'dark') {
+      setTheme(getPreferredTheme())
+    }
+  })
+
+  window.addEventListener('DOMContentLoaded', () => {
+    showActiveTheme(getPreferredTheme())
+
+    document.querySelectorAll('[data-bs-theme-value]')
+      .forEach(toggle => {
+        toggle.addEventListener('click', () => {
+          const theme = toggle.getAttribute('data-bs-theme-value')
+          setStoredTheme(theme)
+          setTheme(theme)
+          showActiveTheme(theme, true)
+        })
+      })
+  })
+})()
+
+
+-- Apagar da pasta Views\Shared o arquivo _Layout.cshtml.css
+
+
+-- Criar na pasta Views\Shared um arquivo com o nome _Loading.cshtml e incluir o código abaixo:
+<div id="loading">
+    <div class="loader simple-loader">
+        <img src="~/img/loader.gif">
+        <h1 class="text-center text-white">&nbsp;&nbsp; Processando...</h1>
+    </div>
+</div>
+
+
+-- Criar na pasta Views\Shared um arquivo com o nome _StyleSwitcher.cshtml e incluir o código abaixo:
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    <symbol id="check2" viewBox="0 0 16 16">
+        <path
+            d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
+    </symbol>
+    <symbol id="circle-half" viewBox="0 0 16 16">
+        <path d="M8 15A7 7 0 1 0 8 1v14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16z" />
+    </symbol>
+    <symbol id="moon-stars-fill" viewBox="0 0 16 16">
+        <path
+            d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z" />
+        <path
+            d="M10.794 3.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387a1.734 1.734 0 0 0-1.097 1.097l-.387 1.162a.217.217 0 0 1-.412 0l-.387-1.162A1.734 1.734 0 0 0 9.31 6.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387a1.734 1.734 0 0 0 1.097-1.097l.387-1.162zM13.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a1.156 1.156 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a1.156 1.156 0 0 0-.732-.732l-.774-.258a.145.145 0 0 1 0-.274l.774-.258c.346-.115.617-.386.732-.732L13.863.1z" />
+    </symbol>
+    <symbol id="sun-fill" viewBox="0 0 16 16">
+        <path
+            d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z" />
+    </symbol>
+</svg>
+
+<div class="dropdown position-fixed bottom-0 end-0 mb-2 me-2 bd-mode-toggle">
+    <button class="btn btn-bd-primary py-2 dropdown-toggle d-flex align-items-center" id="bd-theme" type="button"
+        aria-expanded="false" data-bs-toggle="dropdown" aria-label="Toggle theme (auto)">
+        <svg class="bi my-1 theme-icon-active" width="1em" height="1em">
+            <use href="#circle-half"></use>
+        </svg>
+        <span class="visually-hidden" id="bd-theme-text">Toggle theme</span>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="bd-theme-text">
+        <li>
+            <button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="light"
+                aria-pressed="false">
+                <svg class="bi me-2 opacity-50 theme-icon" width="1em" height="1em">
+                    <use href="#sun-fill"></use>
+                </svg>
+                Claro
+                <svg class="bi ms-auto d-none" width="1em" height="1em">
+                    <use href="#check2"></use>
+                </svg>
+            </button>
+        </li>
+        <li>
+            <button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="dark"
+                aria-pressed="false">
+                <svg class="bi me-2 opacity-50 theme-icon" width="1em" height="1em">
+                    <use href="#moon-stars-fill"></use>
+                </svg>
+                Escuro
+                <svg class="bi ms-auto d-none" width="1em" height="1em">
+                    <use href="#check2"></use>
+                </svg>
+            </button>
+        </li>
+        <li>
+            <button type="button" class="dropdown-item d-flex align-items-center active" data-bs-theme-value="auto"
+                aria-pressed="true">
+                <svg class="bi me-2 opacity-50 theme-icon" width="1em" height="1em">
+                    <use href="#circle-half"></use>
+                </svg>
+                Automático
+                <svg class="bi ms-auto d-none" width="1em" height="1em">
+                    <use href="#check2"></use>
+                </svg>
+            </button>
+        </li>
+    </ul>
+</div>
+
+
+-- Abrir e alterar o arquivo Views\Shared\_Layout.cshtml:
+<!DOCTYPE html>
+<html lang="pt-br" data-bs-theme="auto">
+
+<head>
+    <script src="~/js/color-modes.js"></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MapokoTube | @ViewData["Title"]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/MapokoTube.styles.css" asp-append-version="true" />
+    <link rel="icon" type="image/x-icon" href="~/img/logosmall.png">
+
+    @await RenderSectionAsync("Styles", required: false)
+    <meta name="theme-color" content="#712cf9">
+</head>
+
+<body>
+    <partial name="_StyleSwitcher"></partial>
+    <partial name="_Loading"></partial>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand fw-bold" asp-controller="Home" asp-action="Index">
+                    MAPOKO<span class="text-logo">TUBE</span>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse"
+                    aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Privacy">Privacidade</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container-fluid p-0">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container-fluid">
+            &copy; @(DateTime.Now.Year == 2023 ? "2023" : "2023 - " + DateTime.Now.Year)
+            - Todos os direitos reservados MapokoTube -
+            <a asp-controller="Home" asp-action="Privacy">Termos de Privacidade</a>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+
+</html>
+
+
+-- Abrir e alterar o arquivo Views\Home\Index.cshtml:
+@model List<MapokoTube.Models.Movie>
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="album py-5">
+    <div class="text-center mb-5">
+        <h1 class="display-4">Tudo sobre o mundo dos Filmes</h1>
+    </div>
+
+    <div class="container">
+
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-4 g-3">
+        @foreach (Movie movie in Model)
+        {            
+            <div class="col">
+                <div class="card shadow-sm">
+                    <img class="bd-placeholder-img card-img-top" width="100%" height="400"
+                    src="@movie.Image">
+                    <div class="card-body">
+                        <p class="card-text text-center">@movie.Title</p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-body-secondary">@(movie.AgeRating == 0 ? "Livre" : movie.AgeRating + " anos")</small>
+                            <small class="text-body-secondary">@movie.HourDuration</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        </div>
+    </div>
+</div>
+
+
