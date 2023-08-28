@@ -37,6 +37,6 @@ namespace MapokoTube.Models
         public string VideoFile { get; set; }
 
         [Display(Name = "Tags")]
-        public ICollection<VideoTag> Tags { get; set; }
+        public List<Tag> Tags { get; set; }
     }
 }

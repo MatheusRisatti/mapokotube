@@ -4,23 +4,29 @@ using MapokoTube.Models;
 using MapokoTube.Interfaces;
 
 
-namespace MapokoTube.Controllers;
+namespace GalloFlix.Controllers;
 
 public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
-    private readonly IVideoRepository _VideoRepository;
+    private readonly IVideoRepository _videoRepository;
 
-    public HomeController(ILogger<HomeController> logger, IVideoRepository VideoRepository)
+    public HomeController(ILogger<HomeController> logger, IVideoRepository videoRepository)
     {
         _logger = logger;
-        _VideoRepository = VideoRepository;
+        _videoRepository = videoRepository;
     }
 
     public IActionResult Index()
     {
-        var Videos = _VideoRepository.ReadAll();
-        return View(Videos);
+        var videos = _videoRepository.ReadAllDetailed();
+        return View(videos);
+    }
+
+    public IActionResult Video(int id)
+    {
+        var video  = _videoRepository.ReadByIdDetailed(id);
+        return View(video);
     }
 
     public IActionResult Privacy()
